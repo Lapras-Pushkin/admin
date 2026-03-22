@@ -1,10 +1,11 @@
-#define _CRT_SECURE_NO_WARNINGS
+#define _#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
 #include "models.h"
 #include "user.h"
 #include "staff.h"
 #include "admin.h"
+#include "utils.h" 
 
 // 全局链表头指针初始化
 PatientList patientHead = NULL;
@@ -13,10 +14,13 @@ MedicineList medicineHead = NULL;
 RecordList recordHead = NULL;
 BedList bedHead = NULL;
 
-// 初始化空链表 (带头结点)
+// 初始化所有空链表 (带头结点)，防止野指针导致段错误从而提高鲁棒性
 void initLists() {
-    patientHead = (PatientList)malloc(sizeof(Patient));
-    patientHead->next = NULL;
+    patientHead = (PatientList)malloc(sizeof(Patient)); patientHead->next = NULL;
+    staffHead = (StaffList)malloc(sizeof(Staff)); staffHead->next = NULL;
+    medicineHead = (MedicineList)malloc(sizeof(Medicine)); medicineHead->next = NULL;
+    recordHead = (RecordList)malloc(sizeof(Record)); recordHead->next = NULL;
+    bedHead = (BedList)malloc(sizeof(Bed)); bedHead->next = NULL;
 }
 
 void mainMenu() {
@@ -32,9 +36,8 @@ void mainMenu() {
         printf("==================================\n");
         printf("请输入您的选择: ");
 
-        // 容错处理：灵活的数据输入方式（防止输入非数字导致死循环）
         if (scanf("%d", &choice) != 1) {
-            while (getchar() != '\n'); // 清空输入缓冲区
+            while (getchar() != '\n');
             printf("【错误】输入无效，请输入数字！\n");
             continue;
         }
@@ -45,7 +48,7 @@ void mainMenu() {
         case 3: adminTerminal(); break;
         case 0:
             printf("正在保存数据至本地TXT文件...\n");
-            // saveAllDataToTxt(); // 这里调用文件保存函数
+            saveAllDataToTxt(); // 【修改】解除注释，启用保存
             printf("系统已安全退出，欢迎下次使用！\n");
             exit(0);
         default:
@@ -56,7 +59,7 @@ void mainMenu() {
 
 int main() {
     initLists();
-    // loadAllDataFromTxt(); // 从本地txt读取前置测试数据 (至少30条)
+    loadAllDataFromTxt(); // 系统启动时自动加载至少30条测试数据
     mainMenu();
     return 0;
 }

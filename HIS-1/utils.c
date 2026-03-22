@@ -8,75 +8,94 @@
 // 数据加载模块 (从TXT读取数据到内存链表)
 // ==========================================
 
-// 1. 加载患者数据
 void loadPatients() {
     FILE* fp = fopen("patients.txt", "r");
     if (fp == NULL) {
         printf("【提示】未找到 patients.txt，将以空患者库启动。\n");
         return;
     }
+    Patient* tail = patientHead;
+    while (tail->next != NULL) tail = tail->next;
 
-    Patient* tail = patientHead; // 使用尾指针优化插入效率
-    // 定位到当前链表的实际尾部 (防止重复加载)
-    while (tail->next != NULL) {
-        tail = tail->next;
-    }
-
-    // 循环读取直到文件末尾 (EOF)
     Patient temp;
-    // 假设 txt 格式为: ID 姓名 性别 年龄 过敏史 是否急诊 余额
-    while (fscanf(fp, "%s %s %s %d %s %d %lf",
+    // 【鲁棒性提升】严格校验 fscanf 返回值(7个字段)，防止文件格式损坏导致的死循环
+    while (fscanf(fp, "%19s %99s %99s %d %999s %d %lf",
         temp.id, temp.name, temp.gender, &temp.age,
-        temp.allergy, &temp.isEmergency, &temp.balance) != EOF) {
-
-        // 为新节点分配内存
+        temp.allergy, &temp.isEmergency, &temp.balance) == 7) {
         Patient* newNode = (Patient*)malloc(sizeof(Patient));
-        *newNode = temp; // 结构体整体赋值
+        *newNode = temp;
         newNode->next = NULL;
-
-        // 尾插法接入链表
         tail->next = newNode;
         tail = newNode;
     }
     fclose(fp);
-    printf("【成功】患者档案数据加载完毕。\n");
+    printf("[-] 成功加载患者档案数据。\n");
 }
 
-// 2. 加载药品库数据
 void loadMedicines() {
     FILE* fp = fopen("medicines.txt", "r");
-    if (fp == NULL) {
-        printf("【提示】未找到 medicines.txt，将以空药房启动。\n");
-        return;
-    }
-
+    if (fp == NULL) return;
     Medicine* tail = medicineHead;
     while (tail->next != NULL) tail = tail->next;
 
     Medicine temp;
-    // 假设 txt 格式为: 编号 名称 库存 单价 有效期
-    while (fscanf(fp, "%s %s %d %lf %s",
-        temp.id, temp.name, &temp.stock,
-        &temp.price, temp.expiryDate) != EOF) {
-
+    while (fscanf(fp, "%19s %99s %d %lf %99s",
+        temp.id, temp.name, &temp.stock, &temp.price, temp.expiryDate) == 5) {
         Medicine* newNode = (Medicine*)malloc(sizeof(Medicine));
         *newNode = temp;
         newNode->next = NULL;
-
         tail->next = newNode;
         tail = newNode;
     }
     fclose(fp);
-    printf("【成功】药房库存数据加载完毕。\n");
+    printf("[-] 成功加载药房库存数据。\n");
 }
 
-// 统一对外接口：系统启动时调用
+void loadStaff() {
+    FILE* fp = fopen("staff.txt", "r");
+    if (fp == NULL) return;
+    Staff* tail = staffHead;
+    while (tail->next != NULL) tail = tail->next;
+
+    Staff temp;
+    while (fscanf(fp, "%19s %49s %99s %99s %99s",
+        temp.id, temp.password, temp.name, temp.department, temp.level) == 5) {
+        Staff* newNode = (Staff*)malloc(sizeof(Staff));
+        *newNode = temp;
+        newNode->next = NULL;
+        tail->next = newNode;
+        tail = newNode;
+    }
+    fclose(fp);
+    printf("[-] 成功加载医护人员数据。\n");
+}
+
+void loadRecords() {
+    FILE* fp = fopen("records.txt", "r");
+    if (fp == NULL) return;
+    Record* tail = recordHead;
+    while (tail->next != NULL) tail = tail->next;
+
+    Record temp;
+    while (fscanf(fp, "%29s %d %19s %19s %lf %d %199s",
+        temp.recordId, &temp.type, temp.patientId, temp.staffId,
+        &temp.cost, &temp.isPaid, temp.description) == 7) {
+        Record* newNode = (Record*)malloc(sizeof(Record));
+        *newNode = temp;
+        newNode->next = NULL;
+        tail->next = newNode;
+        tail = newNode;
+    }
+    fclose(fp);
+    printf("[-] 成功加载诊疗流水记录。\n");
+}
+
 void loadAllDataFromTxt() {
     printf("\n--- 正在初始化系统数据 ---\n");
     loadPatients();
     loadMedicines();
-    // loadStaff(); // 按需补充
-    // loadRecords(); // 按需补充
+    loadStaff();
+    loadRecords();
     printf("--------------------------\n");
 }
 
@@ -84,15 +103,10 @@ void loadAllDataFromTxt() {
 // 数据保存模块 (将内存链表写入TXT)
 // ==========================================
 
-// 1. 保存患者数据
 void savePatients() {
-    FILE* fp = fopen("patients.txt", "w"); // "w"模式会覆盖原文件，实现数据更新
-    if (fp == NULL) {
-        printf("【严重错误】无法写入 patients.txt！\n");
-        return;
-    }
-
-    Patient* current = patientHead->next; // 跳过头结点
+    FILE* fp = fopen("patients.txt", "w");
+    if (fp == NULL) return;
+    Patient* current = patientHead->next;
     while (current != NULL) {
         fprintf(fp, "%s %s %s %d %s %d %.2f\n",
             current->id, current->name, current->gender, current->age,
@@ -102,11 +116,9 @@ void savePatients() {
     fclose(fp);
 }
 
-// 2. 保存药品数据
 void saveMedicines() {
     FILE* fp = fopen("medicines.txt", "w");
     if (fp == NULL) return;
-
     Medicine* current = medicineHead->next;
     while (current != NULL) {
         fprintf(fp, "%s %s %d %.2f %s\n",
@@ -117,11 +129,36 @@ void saveMedicines() {
     fclose(fp);
 }
 
-// 统一对外接口：系统安全退出时调用
+void saveStaff() {
+    FILE* fp = fopen("staff.txt", "w");
+    if (fp == NULL) return;
+    Staff* current = staffHead->next;
+    while (current != NULL) {
+        fprintf(fp, "%s %s %s %s %s\n",
+            current->id, current->password, current->name, current->department, current->level);
+        current = current->next;
+    }
+    fclose(fp);
+}
+
+void saveRecords() {
+    FILE* fp = fopen("records.txt", "w");
+    if (fp == NULL) return;
+    Record* current = recordHead->next;
+    while (current != NULL) {
+        // 【鲁棒性注意】文本中不能含有空格，否则下次 fscanf 读取会断掉
+        fprintf(fp, "%s %d %s %s %.2f %d %s\n",
+            current->recordId, current->type, current->patientId, current->staffId,
+            current->cost, current->isPaid, current->description);
+        current = current->next;
+    }
+    fclose(fp);
+}
+
 void saveAllDataToTxt() {
     savePatients();
     saveMedicines();
-    // saveStaff(); // 按需补充
-    // saveRecords(); // 按需补充
+    saveStaff();
+    saveRecords();
     printf("【系统】所有数据已成功保存至本地 TXT 文件。\n");
 }
