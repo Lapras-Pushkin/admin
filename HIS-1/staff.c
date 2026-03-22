@@ -6,7 +6,7 @@
 
 // 内部工具函数：生成唯一的记录流水号
 void generateRecordID(char* buffer) {
-    static int recCount = 1000;
+    static int recCount = 2000;
     sprintf(buffer, "R2025%04d", recCount++);
 }
 

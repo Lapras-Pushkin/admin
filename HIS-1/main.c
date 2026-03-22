@@ -17,7 +17,6 @@ BedList bedHead = NULL;
 void initLists() {
     patientHead = (PatientList)malloc(sizeof(Patient));
     patientHead->next = NULL;
-    // 同理初始化其他链表...
 }
 
 void mainMenu() {

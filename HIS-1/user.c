@@ -3,10 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "models.h"
-// 如果有 user.h，这里也要 include 进来
+#include "user.h"
 
-// ==========================================
-// 辅助函数
+
 // ==========================================
 // 生成唯一的患者ID
 void generatePatientID(char* idBuffer) {
@@ -41,9 +40,15 @@ void registerPatient() {
     newPatient->isEmergency = (type == 2) ? 1 : 0;
 
     printf("请输入姓名: ");
-    scanf("%s", newPatient->name);
+    getchar();
+    // 用 fgets 替代 scanf，兼容中文
+    fgets(newPatient->name, sizeof(newPatient->name), stdin);
+    // 去掉 fgets 自动读取的换行符
+    newPatient->name[strcspn(newPatient->name, "\n")] = '\0';
+
     printf("请输入性别: ");
-    scanf("%s", newPatient->gender);
+    fgets(newPatient->gender,sizeof(newPatient->gender),stdin);
+    newPatient->gender[strcspn(newPatient->gender, "\n")] = '\0';
 
     if (!newPatient->isEmergency) {
         printf("请输入年龄: ");
@@ -59,7 +64,7 @@ void registerPatient() {
     generatePatientID(newPatient->id);
     newPatient->balance = 0.0;
 
-    // 尾插法
+
     Patient* temp = patientHead;
     while (temp->next != NULL) {
         temp = temp->next;
@@ -70,7 +75,105 @@ void registerPatient() {
     printf("档案建立成功！\n");
 }
 
-// 2. 财务与费用中心
+// ==========================================
+// 2. 自助预约与挂号中心
+// ==========================================
+void bookAppointment(const char* currentPatientId) {
+    Patient* currentPatient = findPatientById(currentPatientId);
+    if (currentPatient == NULL) {
+        printf("【系统错误】未找到您的档案信息，请先注册建档！\n");
+        return;
+    }
+
+    printf("\n==================================\n");
+    printf("        自助预约与挂号中心        \n");
+    printf("==================================\n");
+
+    // 1. 浏览科室与当值医生
+    Staff* doctor = staffHead->next;
+    int doctorCount = 0;
+
+    printf("%-10s %-15s %-15s %-15s\n", "医生工号", "姓名", "科室", "级别");
+    printf("--------------------------------------------------\n");
+    while (doctor != NULL) {
+        printf("%-10s %-15s %-15s %-15s\n",
+            doctor->id, doctor->name, doctor->department, doctor->level);
+        doctorCount++;
+        doctor = doctor->next;
+    }
+    printf("--------------------------------------------------\n");
+
+    if (doctorCount == 0) {
+        printf("【抱歉】当前无当值医生排班，请稍后再试。\n");
+        return;
+    }
+
+    // 2. 选择医生挂号
+    char targetDoctorId[20];
+    printf("请输入您要预约的【医生工号】 (输入0退出): ");
+    scanf("%s", targetDoctorId);
+    if (strcmp(targetDoctorId, "0") == 0) return;
+
+    // 校验医生是否存在
+    doctor = staffHead->next;
+    Staff* selectedDoctor = NULL;
+    while (doctor != NULL) {
+        if (strcmp(doctor->id, targetDoctorId) == 0) {
+            selectedDoctor = doctor;
+            break;
+        }
+        doctor = doctor->next;
+    }
+
+    if (selectedDoctor == NULL) {
+        printf("【错误】未找到该工号的医生，挂号失败！\n");
+        return;
+    }
+
+    // 3. 动态计算挂号费 (体现人性化设计：不同级别收费不同)
+    double regFee = 15.0; // 默认普通号
+    if (strstr(selectedDoctor->level, "主任") != NULL) {
+        regFee = 50.0; // 专家号
+    }
+    else if (strstr(selectedDoctor->level, "副主任") != NULL) {
+        regFee = 30.0;
+    }
+
+    // 4. 生成第1类记录：挂号记录待缴费账单
+    Record* newRecord = (Record*)malloc(sizeof(Record));
+
+    // 我们需要声明一下 generateRecordID，因为之前它写在了 staff.c 里
+    // 这里是一个简单的流水号生成器，也可以移到 utils.c 里共享
+    static int regCount = 5000;
+    sprintf(newRecord->recordId, "REG2025%04d", regCount++);
+
+    newRecord->type = 1; // 1 代表挂号记录
+    strcpy(newRecord->patientId, currentPatientId);
+    strcpy(newRecord->staffId, selectedDoctor->id);
+    newRecord->cost = regFee;
+    newRecord->isPaid = 0; // 0 表示待缴费
+
+    sprintf(newRecord->description, "挂号费: %s-%s", selectedDoctor->department, selectedDoctor->name);
+    newRecord->next = NULL;
+
+    // 尾插法加入全局记录链表
+    Record* temp = recordHead;
+    while (temp->next != NULL) {
+        temp = temp->next;
+    }
+    temp->next = newRecord;
+
+    // 5. 成功提示
+    printf("\n【挂号成功】\n");
+    printf("已成功预约 %s 的 %s 医生。\n", selectedDoctor->department, selectedDoctor->name);
+    printf("本次挂号费用: %.2f 元\n", regFee);
+    printf("温馨提示：请前往【财务与费用中心】完成缴费，缴费后方可前往诊室候诊！\n");
+}
+
+
+// ==========================================
+// 3. 财务与费用中心
+// ==========================================
 void financeCenter(const char* currentPatientId) {
     Patient* currentPatient = findPatientById(currentPatientId);
     if (currentPatient == NULL) {
@@ -163,7 +266,7 @@ void financeCenter(const char* currentPatientId) {
 }
 
 // ==========================================
-// 模块三：个人医疗档案库 (历史记录分类查询)
+//4.个人医疗档案库 (历史记录分类查询)
 // ==========================================
 
 // 内部核心工具函数：根据类型过滤并打印记录 (O(N) 时间复杂度遍历)
@@ -198,101 +301,6 @@ void printRecordsByType(const char* patientId, int type, const char* title) {
     }
     printf("----------------------------------------------------------------------\n");
     printf("共找到 %d 条记录，该项累计产生费用: %.2f 元\n", count, typeTotalCost);
-}
-
-// ==========================================
-// 模块四：自助预约与挂号 (生成第1类记录)
-// ==========================================
-void bookAppointment(const char* currentPatientId) {
-    Patient* currentPatient = findPatientById(currentPatientId);
-    if (currentPatient == NULL) {
-        printf("【系统错误】未找到您的档案信息，请先注册建档！\n");
-        return;
-    }
-
-    printf("\n==================================\n");
-    printf("        自助预约与挂号中心        \n");
-    printf("==================================\n");
-
-    // 1. 浏览科室与当值医生
-    Staff* doctor = staffHead->next;
-    int doctorCount = 0;
-
-    printf("%-10s %-15s %-15s %-15s\n", "医生工号", "姓名", "科室", "级别");
-    printf("--------------------------------------------------\n");
-    while (doctor != NULL) {
-        printf("%-10s %-15s %-15s %-15s\n",
-            doctor->id, doctor->name, doctor->department, doctor->level);
-        doctorCount++;
-        doctor = doctor->next;
-    }
-    printf("--------------------------------------------------\n");
-
-    if (doctorCount == 0) {
-        printf("【抱歉】当前无当值医生排班，请稍后再试。\n");
-        return;
-    }
-
-    // 2. 选择医生挂号
-    char targetDoctorId[20];
-    printf("请输入您要预约的【医生工号】 (输入0退出): ");
-    scanf("%s", targetDoctorId);
-    if (strcmp(targetDoctorId, "0") == 0) return;
-
-    // 校验医生是否存在
-    doctor = staffHead->next;
-    Staff* selectedDoctor = NULL;
-    while (doctor != NULL) {
-        if (strcmp(doctor->id, targetDoctorId) == 0) {
-            selectedDoctor = doctor;
-            break;
-        }
-        doctor = doctor->next;
-    }
-
-    if (selectedDoctor == NULL) {
-        printf("【错误】未找到该工号的医生，挂号失败！\n");
-        return;
-    }
-
-    // 3. 动态计算挂号费 (体现人性化设计：不同级别收费不同)
-    double regFee = 15.0; // 默认普通号
-    if (strstr(selectedDoctor->level, "主任") != NULL) {
-        regFee = 50.0; // 专家号
-    }
-    else if (strstr(selectedDoctor->level, "副主任") != NULL) {
-        regFee = 30.0;
-    }
-
-    // 4. 生成第1类记录：挂号记录待缴费账单
-    Record* newRecord = (Record*)malloc(sizeof(Record));
-
-    // 我们需要声明一下 generateRecordID，因为之前它写在了 staff.c 里
-    // 为了简单，这里直接复刻一个简单的流水号生成器，或者你可以把它移到 utils.c 里共享
-    static int regCount = 5000;
-    sprintf(newRecord->recordId, "REG2025%04d", regCount++);
-
-    newRecord->type = 1; // 1 代表挂号记录
-    strcpy(newRecord->patientId, currentPatientId);
-    strcpy(newRecord->staffId, selectedDoctor->id);
-    newRecord->cost = regFee;
-    newRecord->isPaid = 0; // 0 表示待缴费
-
-    sprintf(newRecord->description, "挂号费: %s-%s", selectedDoctor->department, selectedDoctor->name);
-    newRecord->next = NULL;
-
-    // 尾插法加入全局记录链表
-    Record* temp = recordHead;
-    while (temp->next != NULL) {
-        temp = temp->next;
-    }
-    temp->next = newRecord;
-
-    // 5. 成功提示
-    printf("\n【挂号成功】\n");
-    printf("已成功预约 %s 的 %s 医生。\n", selectedDoctor->department, selectedDoctor->name);
-    printf("本次挂号费用: %.2f 元\n", regFee);
-    printf("温馨提示：请前往【财务与费用中心】完成缴费，缴费后方可前往诊室候诊！\n");
 }
 
 
@@ -336,9 +344,8 @@ void medicalRecords(const char* currentPatientId) {
     }
 }
 
-// 3. 用户端主菜单调度
 // ==========================================
-// 用户端主菜单调度
+// 5. 用户端主菜单调度
 // ==========================================
 void userTerminal() {
     int choice;
